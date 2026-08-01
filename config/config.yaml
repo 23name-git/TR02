@@ -102,6 +102,8 @@ platforms:
       
     - id: "tencent"
       name: "腾讯新闻-综合早报"
+    - id: "github"
+      name: "use myFetch with default options"
 
 
 
