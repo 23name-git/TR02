@@ -99,7 +99,9 @@ platforms:
     - id: "zhihu"
       name: "知乎"
       expected_domain: "zhihu.com"
-
+      
+    - id: "tencent"
+      name: "腾讯新闻-综合早报"
 
 
 
