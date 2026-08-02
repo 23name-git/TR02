@@ -147,6 +147,10 @@ rss:
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
 
+    - id: "全球新闻"
+      name: "全球新闻"
+      url: "https://www.bing.com/news/search?q=全球新闻&format=RSS"
+
     # 自定义源示例
     # - id: "custom-feed"
     #   name: "自定义源"
