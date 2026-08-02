@@ -157,7 +157,7 @@ rss:
 
     - id: "feeds_all_rss"
       name: "免费的公众号 RSS"
-      url: "https://raw.githubusercontent.com/feeddd/feeds/master/feeds_all_rss.txt"
+      url: "https://feed.hamibot.com/api/feeds/633eed96e1190840770abd46"
 
     # 自定义源示例
     # - id: "custom-feed"
