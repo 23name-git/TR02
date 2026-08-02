@@ -147,9 +147,13 @@ rss:
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
 
-    - id: "全球新闻"
+    - id: "bing"
       name: "全球新闻"
       url: "https://www.bing.com/news/search?q=全球新闻&format=RSS"
+
+    - id: "weichen"
+      name: "微尘印记"
+      url: "https://weichen.ink/rss.xml"
 
     # 自定义源示例
     # - id: "custom-feed"
