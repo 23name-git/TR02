@@ -127,22 +127,21 @@ def get_remote_storage() -> RemoteStorageBackend:
 
 
 def list_date_keys(storage: RemoteStorageBackend, prefix: str, start: datetime, end: datetime) -> List[str]:
-    """使用官方方法列出日期范围内的对象键"""
+    """
+    列出日期范围内的对象键（绕开 list_objects_v2，COS 上该操作签名不兼容）
+    用 head_object 探测已知 Key：news/YYYY-MM-DD.db 或 rss/YYYY-MM-DD.db
+    """
     keys = []
-    # 复用官方的分页列举逻辑
-    paginator = storage.s3_client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=COS_BUCKET, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith("/"):
-                continue
-            try:
-                date_str = key.split("/")[1][:10]  # YYYY-MM-DD
-                file_date = datetime.strptime(date_str, "%Y-%m-%d")
-                if start <= file_date <= end:
-                    keys.append(key)
-            except Exception:
-                continue
+    current = start
+    while current <= end:
+        date_str = current.strftime("%Y-%m-%d")
+        key = f"{prefix}{date_str}.db"
+        try:
+            storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+            keys.append(key)
+        except Exception:
+            pass  # 不存在，跳过
+        current += timedelta(days=1)
     return keys
 
 
