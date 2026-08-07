@@ -3,7 +3,7 @@ name: Yearly Summary
 on:
   schedule:
     # 每年 1 月 2 号 UTC 00:00 = 北京时间 1 月 2 号 08:00，跑去年全年汇总
-    - cron: "0 0 2 1 1 *"
+    - cron: "0 0 2 1 *"
   workflow_dispatch:
 
 permissions:
