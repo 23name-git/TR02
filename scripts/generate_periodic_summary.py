@@ -71,6 +71,13 @@ def get_s3_client():
     use_sigv2 = "myqcloud.com" in COS_ENDPOINT.lower() or "aliyuncs.com" in COS_ENDPOINT.lower()
     signature_version = "s3" if use_sigv2 else "s3v4"
 
+    # 调试输出
+    print(f"[DEBUG] COS_ENDPOINT={COS_ENDPOINT}")
+    print(f"[DEBUG] COS_BUCKET={COS_BUCKET}")
+    print(f"[DEBUG] COS_AK={COS_AK[:4]}****{COS_AK[-4:] if COS_AK else 'None'}")
+    print(f"[DEBUG] COS_REGION={COS_REGION}")
+    print(f"[DEBUG] use_sigv2={use_sigv2}, signature_version={signature_version}")
+
     return boto3.client(
         "s3",
         endpoint_url=COS_ENDPOINT,
