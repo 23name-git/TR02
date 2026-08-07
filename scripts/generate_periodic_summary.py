@@ -126,23 +126,37 @@ def get_remote_storage() -> RemoteStorageBackend:
     )
 
 
-def list_date_keys(storage: RemoteStorageBackend, prefix: str, start: datetime, end: datetime) -> List[str]:
+def list_latest_db_keys(storage: RemoteStorageBackend, prefix: str) -> List[str]:
     """
-    列出日期范围内的对象键（绕开 list_objects_v2，COS 上该操作签名不兼容）
-    用 head_object 探测已知 Key：news/YYYY-MM-DD.db 或 rss/YYYY-MM-DD.db
+    找最新的一个 .db 文件（COS 上只有最新日期的文件，数据全在里面）
+    用 head_object 探测：从今天往前找，最多找 7 天（周报）、31 天（月报）等
     """
-    keys = []
-    current = start
-    while current <= end:
-        date_str = current.strftime("%Y-%m-%d")
+    # 先尝试今天
+    today = datetime.now().strftime("%Y-%m-%d")
+    key = f"{prefix}{today}.db"
+    try:
+        storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+        return [key]
+    except Exception:
+        pass
+
+    # 往前找最多 365 天（年报最长）
+    for i in range(1, 366):
+        date_str = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         key = f"{prefix}{date_str}.db"
         try:
             storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
-            keys.append(key)
+            return [key]
         except Exception:
-            pass  # 不存在，跳过
-        current += timedelta(days=1)
-    return keys
+            continue
+    return []
+
+
+def list_date_keys(storage: RemoteStorageBackend, prefix: str, start: datetime, end: datetime) -> List[str]:
+    """
+    统一入口：返回最新的一个 .db key（数据全在里面，后续在 SQLite 里按日期过滤）
+    """
+    return list_latest_db_keys(storage, prefix)
 
 
 def download_db_files(storage: RemoteStorageBackend, keys: List[str], local_dir: Path) -> List[Path]:
@@ -160,15 +174,34 @@ def download_db_files(storage: RemoteStorageBackend, keys: List[str], local_dir:
     return downloaded
 
 
-def merge_news_databases(db_paths: List[Path]) -> List[Dict[str, Any]]:
-    """合并多个 SQLite 数据库的 news_items 表"""
+def merge_news_databases(db_paths: List[Path], start: datetime, end: datetime) -> List[Dict[str, Any]]:
+    """合并多个 SQLite 数据库的 news_items 表，并按日期过滤"""
     all_items = []
     for db_path in db_paths:
         try:
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM news_items")
+            # 假设表中有 crawl_time 或 created_at 字段（按实际表结构调整）
+            # 先查表结构
+            cursor.execute("PRAGMA table_info(news_items)")
+            cols = [row[1] for row in cursor.fetchall()]
+            
+            # 找时间字段
+            time_col = None
+            for col in ['crawl_time', 'created_at', 'timestamp', 'date', 'pub_time']:
+                if col in cols:
+                    time_col = col
+                    break
+            
+            if time_col:
+                start_ts = start.strftime("%Y-%m-%d %H:%M:%S")
+                end_ts = end.strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute(f"SELECT * FROM news_items WHERE {time_col} BETWEEN ? AND ?", (start_ts, end_ts))
+            else:
+                # 没时间字段，全取
+                cursor.execute("SELECT * FROM news_items")
+            
             rows = cursor.fetchall()
             for row in rows:
                 all_items.append(dict(row))
@@ -178,15 +211,33 @@ def merge_news_databases(db_paths: List[Path]) -> List[Dict[str, Any]]:
     return all_items
 
 
-def merge_rss_databases(db_paths: List[Path]) -> List[Dict[str, Any]]:
-    """合并 RSS 数据库"""
+def merge_rss_databases(db_paths: List[Path], start: datetime, end: datetime) -> List[Dict[str, Any]]:
+    """合并 RSS 数据库，并按日期过滤"""
     all_items = []
     for db_path in db_paths:
         try:
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM rss_items")
+            # 先查表结构
+            cursor.execute("PRAGMA table_info(rss_items)")
+            cols = [row[1] for row in cursor.fetchall()]
+
+            # 找时间字段
+            time_col = None
+            for col in ['crawl_time', 'created_at', 'timestamp', 'date', 'pub_time', 'published_at']:
+                if col in cols:
+                    time_col = col
+                    break
+
+            if time_col:
+                start_ts = start.strftime("%Y-%m-%d %H:%M:%S")
+                end_ts = end.strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute(f"SELECT * FROM rss_items WHERE {time_col} BETWEEN ? AND ?", (start_ts, end_ts))
+            else:
+                # 没时间字段，全取
+                cursor.execute("SELECT * FROM rss_items")
+
             rows = cursor.fetchall()
             for row in rows:
                 all_items.append(dict(row))
@@ -399,8 +450,8 @@ def main():
 
         # 2. 合并数据
         print("🔄 合并数据库...")
-        news_items = merge_news_databases(news_dbs)
-        rss_items = merge_rss_databases(rss_dbs)
+        news_items = merge_news_databases(news_dbs, start, end)
+        rss_items = merge_rss_databases(rss_dbs, start, end)
         print(f"📊 合并后: 热榜 {len(news_items)} 条, RSS {len(rss_items)} 条")
 
         if not news_items and not rss_items:
