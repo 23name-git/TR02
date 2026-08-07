@@ -40,8 +40,8 @@ app:
 # 详细时间线图请查看 config/timeline.yaml
 # ===============================================================
 schedule:
-  #enabled: true                         # 是否启用调度系统（true=启用, false=关闭，默认关闭）
-  enabled: false               # 改成 false，禁用 timeline 调度
+  enabled: true                         # 是否启用调度系统（true=启用, false=关闭，默认关闭）
+  #enabled: false               # 改成 false，禁用 timeline 调度
   
   preset: "morning_evening"             # 预设模板名称（见上方说明）
 
@@ -173,8 +173,8 @@ rss:
 # 4. 报告模式
 # ===============================================================
 report:
-  #mode: "current"                     # 报告模式（开启 schedule 后作为默认值，会被 timeline 时段覆盖）
-  mode: "daily"                                     # daily = 当日汇总，按时推送当天所有匹配新闻（会包含之前推过的）
+  mode: "current"                     # 报告模式（开启 schedule 后作为默认值，会被 timeline 时段覆盖）
+  #mode: "daily"                                     # daily = 当日汇总，按时推送当天所有匹配新闻（会包含之前推过的）
                                       # current = 当前榜单，按时推送当前在榜的匹配新闻（持续在榜的每次都出现）
   #mode: "incremental"                                     # incremental = 增量监控，只推送新增内容，零重复（没有新增时不推送）
 
