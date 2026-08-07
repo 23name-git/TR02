@@ -35,9 +35,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
       - name: Install dependencies
-        run: |
-          pip install boto3 requests jieba
+        run: uv sync --frozen --no-dev
 
       - name: Generate Quarterly Summary
         run: |
