@@ -41,6 +41,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --no-dev
 
+      - name: Verify dependencies
+        run: |
+          python -c "import requests; import jieba; import boto3; print('✅ 所有依赖已安装')"
+
       - name: Generate Monthly Summary
         run: |
           python scripts/generate_periodic_summary.py --period monthly
