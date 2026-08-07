@@ -4,10 +4,9 @@
 TrendRadar 周/月/季/年汇总报告生成脚本
 用法: python scripts/generate_periodic_summary.py --period weekly|monthly|quarterly|yearly
 
-环境变量（从 GitHub Secrets 注入）:
-  - S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION
-  - AI_API_KEY, AI_MODEL, AI_API_BASE
-  - FEISHU_WEBHOOK_URL
+核心改进：直接复用 TrendRadar 官方 RemoteStorage 类，
+与 Get Hot News 爬虫使用完全相同的存储访问代码路径，
+零配置差异，自动处理 SigV2/SigV4、virtual-hosted style 等细节。
 """
 
 import os
@@ -23,13 +22,13 @@ from collections import Counter
 import json
 
 try:
-    import boto3
-    from botocore.config import Config
     import requests
     import jieba
+    # 直接复用官方存储模块
+    from trendradar.storage.remote import RemoteStorage
 except ImportError as e:
     print(f"❌ 缺少依赖: {e}")
-    print("请运行: pip install boto3 requests jieba")
+    print("请运行: pip install requests jieba")
     sys.exit(1)
 
 # ============ 配置区（从环境变量读取） ============
@@ -61,34 +60,6 @@ if missing:
 
 # 初始化 jieba
 jieba.initialize()
-
-
-def get_s3_client():
-    """创建 S3 兼容客户端（腾讯云 COS）"""
-    # 与 TrendRadar 官方 storage/remote.py 保持一致：
-    # - 腾讯云 COS / 阿里云 OSS 使用 SigV2，避免签名/分块编码问题
-    # - 其他服务商（AWS/R2/MinIO）使用 SigV4
-    use_sigv2 = "myqcloud.com" in COS_ENDPOINT.lower() or "aliyuncs.com" in COS_ENDPOINT.lower()
-    signature_version = "s3" if use_sigv2 else "s3v4"
-
-    # 调试输出
-    print(f"[DEBUG] COS_ENDPOINT={COS_ENDPOINT}")
-    print(f"[DEBUG] COS_BUCKET={COS_BUCKET}")
-    print(f"[DEBUG] COS_AK={COS_AK[:4]}****{COS_AK[-4:] if COS_AK else 'None'}")
-    print(f"[DEBUG] COS_REGION={COS_REGION}")
-    print(f"[DEBUG] use_sigv2={use_sigv2}, signature_version={signature_version}")
-
-    return boto3.client(
-        "s3",
-        endpoint_url=COS_ENDPOINT,
-        aws_access_key_id=COS_AK,
-        aws_secret_access_key=COS_SK,
-        region_name=COS_REGION,
-        config=Config(
-            s3={"addressing_style": "virtual"},
-            signature_version=signature_version,
-        ),
-    )
 
 
 def parse_period(period: str) -> tuple[datetime, datetime]:
@@ -139,19 +110,35 @@ def parse_period(period: str) -> tuple[datetime, datetime]:
     return start, end
 
 
-def list_cos_objects(s3, prefix: str, start: datetime, end: datetime) -> List[str]:
-    """列出日期范围内的对象键"""
+def get_remote_storage() -> RemoteStorage:
+    """创建官方 RemoteStorage 实例，完全复用爬虫的存储配置逻辑"""
+    print(f"[INFO] 初始化 RemoteStorage: bucket={COS_BUCKET}, endpoint={COS_ENDPOINT}, region={COS_REGION}")
+    return RemoteStorage(
+        bucket_name=COS_BUCKET,
+        access_key_id=COS_AK,
+        secret_access_key=COS_SK,
+        endpoint_url=COS_ENDPOINT,
+        region=COS_REGION,
+        # 以下使用默认值，与官方保持一致
+        enable_txt=False,
+        enable_html=False,
+        retention_days=0,
+        temp_dir=None,
+    )
+
+
+def list_date_keys(storage: RemoteStorage, prefix: str, start: datetime, end: datetime) -> List[str]:
+    """使用官方方法列出日期范围内的对象键"""
     keys = []
-    paginator = s3.get_paginator("list_objects_v2")
+    # 复用官方的分页列举逻辑
+    paginator = storage.s3_client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=COS_BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            # 从键名提取日期：news/2025-09-30.db 或 news/2025-09-30/xxx.db
+            if key.endswith("/"):
+                continue
             try:
-                # 跳过目录标记
-                if key.endswith("/"):
-                    continue
-                date_str = key.split("/")[1][:10]  # 取 YYYY-MM-DD
+                date_str = key.split("/")[1][:10]  # YYYY-MM-DD
                 file_date = datetime.strptime(date_str, "%Y-%m-%d")
                 if start <= file_date <= end:
                     keys.append(key)
@@ -160,13 +147,17 @@ def list_cos_objects(s3, prefix: str, start: datetime, end: datetime) -> List[st
     return keys
 
 
-def download_db_files(s3, keys: List[str], local_dir: Path) -> List[Path]:
+def download_db_files(storage: RemoteStorage, keys: List[str], local_dir: Path) -> List[Path]:
     """下载数据库文件到本地临时目录"""
     local_dir.mkdir(parents=True, exist_ok=True)
     downloaded = []
     for key in keys:
         local_path = local_dir / Path(key).name
-        s3.download_file(COS_BUCKET, key, str(local_path))
+        # 使用官方的下载方法（支持 chunked encoding）
+        response = storage.s3_client.get_object(Bucket=COS_BUCKET, Key=key)
+        with open(local_path, 'wb') as f:
+            for chunk in response['Body'].iter_chunks(chunk_size=1024*1024):
+                f.write(chunk)
         downloaded.append(local_path)
     return downloaded
 
@@ -347,11 +338,11 @@ def send_feishu(text: str):
                 pass
 
 
-def upload_html_to_cos(s3, html_content: str, period: str, start: datetime, end: datetime):
+def upload_html_to_cos(storage: RemoteStorage, html_content: str, period: str, start: datetime, end: datetime):
     """上传 HTML 版报告到 COS summary/ 目录"""
     try:
         key = f"summary/{period}/{start.strftime('%Y-%m-%d')}_to_{end.strftime('%Y-%m-%d')}.html"
-        s3.put_object(
+        storage.s3_client.put_object(
             Bucket=COS_BUCKET,
             Key=key,
             Body=html_content.encode("utf-8"),
@@ -364,7 +355,6 @@ def upload_html_to_cos(s3, html_content: str, period: str, start: datetime, end:
 
 def markdown_to_html(md: str) -> str:
     """简单的 Markdown 转 HTML（用于 COS 归档）"""
-    # 这里用简单替换，实际可用 markdown2 或 mistune
     html = md.replace("## ", "<h2>").replace("##", "</h2>") \
              .replace("### ", "<h3>").replace("###", "</h3>") \
              .replace("**", "<strong>").replace("**", "</strong>") \
@@ -391,12 +381,13 @@ def main():
     start, end = parse_period(args.period)
     print(f"📅 统计范围: {start.strftime('%Y-%m-%d %H:%M')} ~ {end.strftime('%Y-%m-%d %H:%M')}")
 
-    s3 = get_s3_client()
+    # 使用官方 RemoteStorage，完全复用爬虫的存储访问逻辑
+    storage = get_remote_storage()
 
     # 1. 列出并下载 news/ 和 rss/ 下的数据库
     print("🔍 扫描 COS 数据...")
-    news_keys = list_cos_objects(s3, "news/", start, end)
-    rss_keys = list_cos_objects(s3, "rss/", start, end)
+    news_keys = list_date_keys(storage, "news/", start, end)
+    rss_keys = list_date_keys(storage, "rss/", start, end)
     print(f"📦 找到 news 数据库: {len(news_keys)} 个, rss 数据库: {len(rss_keys)} 个")
 
     if not news_keys and not rss_keys:
@@ -405,8 +396,8 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        news_dbs = download_db_files(s3, news_keys, tmp / "news")
-        rss_dbs = download_db_files(s3, rss_keys, tmp / "rss")
+        news_dbs = download_db_files(storage, news_keys, tmp / "news")
+        rss_dbs = download_db_files(storage, rss_keys, tmp / "rss")
 
         # 2. 合并数据
         print("🔄 合并数据库...")
@@ -433,7 +424,7 @@ def main():
         send_feishu(full_text)
 
         # 6. 上传 HTML 到 COS（归档）
-        upload_html_to_cos(s3, html_content, args.period, start, end)
+        upload_html_to_cos(storage, html_content, args.period, start, end)
 
     print("✅ 汇总报告生成完成！")
 
