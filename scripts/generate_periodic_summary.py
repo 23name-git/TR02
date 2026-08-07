@@ -40,7 +40,8 @@ COS_ENDPOINT = os.getenv("S3_ENDPOINT_URL")
 COS_BUCKET = os.getenv("S3_BUCKET_NAME")
 COS_AK = os.getenv("S3_ACCESS_KEY_ID")
 COS_SK = os.getenv("S3_SECRET_ACCESS_KEY")
-COS_REGION = os.getenv("S3_REGION", "ap-guangzhou")
+# 与 crawler 存储管理器保持一致：不设默认值，为空则传空字符串（boto3 从 endpoint 推断）
+COS_REGION = os.getenv("S3_REGION", "")
 
 AI_API_KEY = os.getenv("AI_API_KEY")
 AI_MODEL = os.getenv("AI_MODEL", "deepseek/deepseek-v4-flash")
