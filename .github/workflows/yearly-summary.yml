@@ -51,4 +51,4 @@ jobs:
 
       - name: Generate Yearly Summary
         run: |
-          python scripts/generate_periodic_summary.py --period yearly
+          uv run python scripts/generate_periodic_summary.py --period yearly
