@@ -137,21 +137,27 @@ def list_latest_db_keys(storage: RemoteStorageBackend, prefix: str) -> List[str]
     # 用北京时间找文件（COS 文件名用北京时间）
     today = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
     key = f"{prefix}{today}.db"
+    print(f"[DEBUG] 尝试 Key: {key}")
     try:
         storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+        print(f"[DEBUG] 找到文件: {key}")
         return [key]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[DEBUG] Key 不存在或报错: {key}, 错误: {type(e).__name__}: {e}")
 
     # 往前找最多 365 天（年报最长）
     for i in range(1, 366):
         date_str = (datetime.now(BEIJING_TZ) - timedelta(days=i)).strftime("%Y-%m-%d")
         key = f"{prefix}{date_str}.db"
+        print(f"[DEBUG] 尝试 Key: {key}")
         try:
             storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+            print(f"[DEBUG] 找到文件: {key}")
             return [key]
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG] Key 不存在或报错: {key}, 错误: {type(e).__name__}: {e}")
             continue
+    print(f"[DEBUG] {prefix} 前缀下 365 天内均未找到 .db 文件")
     return []
 
 
