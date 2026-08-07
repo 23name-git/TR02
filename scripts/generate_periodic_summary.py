@@ -26,6 +26,7 @@ try:
     import jieba
     # 直接复用官方存储模块
     from trendradar.storage.remote import RemoteStorageBackend
+    from botocore.exceptions import ClientError
 except ImportError as e:
     print(f"❌ 缺少依赖: {e}")
     print("请运行: pip install requests jieba")
@@ -129,34 +130,47 @@ def get_remote_storage() -> RemoteStorageBackend:
     )
 
 
+def _object_exists(storage: RemoteStorageBackend, key: str) -> bool:
+    """
+    轻量检查对象是否存在：用 get_object + Range 头只读 1 字节
+    避开 HeadObject 403 问题（GetObject 有权限，HeadObject 无权限）
+    """
+    try:
+        storage.s3_client.get_object(Bucket=COS_BUCKET, Key=key, Range='bytes=0-0')
+        return True
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "")
+        if code in ("404", "NoSuchKey"):
+            return False
+        # 其他错误（如 403）当作不存在处理，避免误判
+        print(f"[DEBUG] 检查 {key} 出错: {code} - {e}")
+        return False
+    except Exception as e:
+        print(f"[DEBUG] 检查 {key} 异常: {type(e).__name__}: {e}")
+        return False
+
+
 def list_latest_db_keys(storage: RemoteStorageBackend, prefix: str) -> List[str]:
     """
     找最新的一个 .db 文件（COS 上只有最新日期的文件，数据全在里面）
-    用 head_object 探测：从今天(北京时间)往前找，最多找 365 天
+    用 get_object + Range 探测：从今天(北京时间)往前找，最多找 365 天
     """
     # 用北京时间找文件（COS 文件名用北京时间）
     today = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
     key = f"{prefix}{today}.db"
     print(f"[DEBUG] 尝试 Key: {key}")
-    try:
-        storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+    if _object_exists(storage, key):
         print(f"[DEBUG] 找到文件: {key}")
         return [key]
-    except Exception as e:
-        print(f"[DEBUG] Key 不存在或报错: {key}, 错误: {type(e).__name__}: {e}")
 
     # 往前找最多 365 天（年报最长）
     for i in range(1, 366):
         date_str = (datetime.now(BEIJING_TZ) - timedelta(days=i)).strftime("%Y-%m-%d")
         key = f"{prefix}{date_str}.db"
         print(f"[DEBUG] 尝试 Key: {key}")
-        try:
-            storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
+        if _object_exists(storage, key):
             print(f"[DEBUG] 找到文件: {key}")
             return [key]
-        except Exception as e:
-            print(f"[DEBUG] Key 不存在或报错: {key}, 错误: {type(e).__name__}: {e}")
-            continue
     print(f"[DEBUG] {prefix} 前缀下 365 天内均未找到 .db 文件")
     return []
 
