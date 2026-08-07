@@ -65,6 +65,12 @@ jieba.initialize()
 
 def get_s3_client():
     """创建 S3 兼容客户端（腾讯云 COS）"""
+    # 与 TrendRadar 官方 storage/remote.py 保持一致：
+    # - 腾讯云 COS / 阿里云 OSS 使用 SigV2，避免签名/分块编码问题
+    # - 其他服务商（AWS/R2/MinIO）使用 SigV4
+    use_sigv2 = "myqcloud.com" in COS_ENDPOINT.lower() or "aliyuncs.com" in COS_ENDPOINT.lower()
+    signature_version = "s3" if use_sigv2 else "s3v4"
+
     return boto3.client(
         "s3",
         endpoint_url=COS_ENDPOINT,
@@ -72,8 +78,8 @@ def get_s3_client():
         aws_secret_access_key=COS_SK,
         region_name=COS_REGION,
         config=Config(
-            signature_version="s3v4",
-            s3={"addressing_style": "virtual"}
+            s3={"addressing_style": "virtual"},
+            signature_version=signature_version,
         ),
     )
 
