@@ -25,7 +25,7 @@ try:
     import requests
     import jieba
     # 直接复用官方存储模块
-    from trendradar.storage.remote import RemoteStorage
+    from trendradar.storage.remote import RemoteStorageBackend
 except ImportError as e:
     print(f"❌ 缺少依赖: {e}")
     print("请运行: pip install requests jieba")
@@ -110,10 +110,10 @@ def parse_period(period: str) -> tuple[datetime, datetime]:
     return start, end
 
 
-def get_remote_storage() -> RemoteStorage:
-    """创建官方 RemoteStorage 实例，完全复用爬虫的存储配置逻辑"""
-    print(f"[INFO] 初始化 RemoteStorage: bucket={COS_BUCKET}, endpoint={COS_ENDPOINT}, region={COS_REGION}")
-    return RemoteStorage(
+def get_remote_storage() -> RemoteStorageBackend:
+    """创建官方 RemoteStorageBackend 实例，完全复用爬虫的存储配置逻辑"""
+    print(f"[INFO] 初始化 RemoteStorageBackend: bucket={COS_BUCKET}, endpoint={COS_ENDPOINT}, region={COS_REGION}")
+    return RemoteStorageBackend(
         bucket_name=COS_BUCKET,
         access_key_id=COS_AK,
         secret_access_key=COS_SK,
@@ -122,12 +122,11 @@ def get_remote_storage() -> RemoteStorage:
         # 以下使用默认值，与官方保持一致
         enable_txt=False,
         enable_html=False,
-        retention_days=0,
         temp_dir=None,
     )
 
 
-def list_date_keys(storage: RemoteStorage, prefix: str, start: datetime, end: datetime) -> List[str]:
+def list_date_keys(storage: RemoteStorageBackend, prefix: str, start: datetime, end: datetime) -> List[str]:
     """使用官方方法列出日期范围内的对象键"""
     keys = []
     # 复用官方的分页列举逻辑
@@ -147,7 +146,7 @@ def list_date_keys(storage: RemoteStorage, prefix: str, start: datetime, end: da
     return keys
 
 
-def download_db_files(storage: RemoteStorage, keys: List[str], local_dir: Path) -> List[Path]:
+def download_db_files(storage: RemoteStorageBackend, keys: List[str], local_dir: Path) -> List[Path]:
     """下载数据库文件到本地临时目录"""
     local_dir.mkdir(parents=True, exist_ok=True)
     downloaded = []
@@ -338,7 +337,7 @@ def send_feishu(text: str):
                 pass
 
 
-def upload_html_to_cos(storage: RemoteStorage, html_content: str, period: str, start: datetime, end: datetime):
+def upload_html_to_cos(storage: RemoteStorageBackend, html_content: str, period: str, start: datetime, end: datetime):
     """上传 HTML 版报告到 COS summary/ 目录"""
     try:
         key = f"summary/{period}/{start.strftime('%Y-%m-%d')}_to_{end.strftime('%Y-%m-%d')}.html"
