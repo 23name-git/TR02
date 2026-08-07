@@ -41,14 +41,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --no-dev
 
-      - name: Ensure pip dependencies
-        run: |
-          pip install requests jieba boto3
-
-      - name: Verify dependencies
-        run: |
-          python -c "import requests; import jieba; import boto3; print('✅ 所有依赖已安装')"
-
       - name: Generate Quarterly Summary
         run: |
           uv run python scripts/generate_periodic_summary.py --period quarterly
