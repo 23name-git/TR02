@@ -132,11 +132,13 @@ def get_remote_storage() -> RemoteStorageBackend:
 
 def _object_exists(storage: RemoteStorageBackend, key: str) -> bool:
     """
-    轻量检查对象是否存在：用 get_object + Range 头只读 1 字节
-    避开 HeadObject 403 问题（GetObject 有权限，HeadObject 无权限）
+    轻量检查对象是否存在：用 get_object 只读 1 字节（不带 Range，避免 SigV2 签名问题）
     """
     try:
-        storage.s3_client.get_object(Bucket=COS_BUCKET, Key=key, Range='bytes=0-0')
+        response = storage.s3_client.get_object(Bucket=COS_BUCKET, Key=key)
+        # 只读 1 字节即可确认存在，然后关闭流
+        response['Body'].read(1)
+        response['Body'].close()
         return True
     except ClientError as e:
         code = e.response.get("Error", {}).get("Code", "")
