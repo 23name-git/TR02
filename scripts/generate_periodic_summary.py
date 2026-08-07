@@ -71,7 +71,10 @@ def get_s3_client():
         aws_access_key_id=COS_AK,
         aws_secret_access_key=COS_SK,
         region_name=COS_REGION,
-        config=Config(signature_version="s3v4"),
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "virtual"}
+        ),
     )
 
 
