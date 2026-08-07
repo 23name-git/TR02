@@ -15,7 +15,7 @@ import argparse
 import sqlite3
 import tempfile
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any
 from collections import Counter
@@ -30,6 +30,9 @@ except ImportError as e:
     print(f"❌ 缺少依赖: {e}")
     print("请运行: pip install requests jieba")
     sys.exit(1)
+
+# 北京时区（UTC+8）
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 # ============ 配置区（从环境变量读取） ============
 COS_ENDPOINT = os.getenv("S3_ENDPOINT_URL")
@@ -71,8 +74,8 @@ def parse_period(period: str) -> tuple[datetime, datetime]:
     - quarterly: 上个自然季度
     - yearly: 去年全年
     """
-    # 运行环境设置了 TZ=Asia/Shanghai，datetime.now() 即为北京时间
-    now = datetime.now()
+    # 用北京时间计算周期边界（COS 文件名、数据时间戳均为北京时间）
+    now = datetime.now(BEIJING_TZ)
 
     if period == "weekly":
         # 上周一
@@ -129,10 +132,10 @@ def get_remote_storage() -> RemoteStorageBackend:
 def list_latest_db_keys(storage: RemoteStorageBackend, prefix: str) -> List[str]:
     """
     找最新的一个 .db 文件（COS 上只有最新日期的文件，数据全在里面）
-    用 head_object 探测：从今天往前找，最多找 7 天（周报）、31 天（月报）等
+    用 head_object 探测：从今天(北京时间)往前找，最多找 365 天
     """
-    # 先尝试今天
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 用北京时间找文件（COS 文件名用北京时间）
+    today = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
     key = f"{prefix}{today}.db"
     try:
         storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
@@ -142,7 +145,7 @@ def list_latest_db_keys(storage: RemoteStorageBackend, prefix: str) -> List[str]
 
     # 往前找最多 365 天（年报最长）
     for i in range(1, 366):
-        date_str = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        date_str = (datetime.now(BEIJING_TZ) - timedelta(days=i)).strftime("%Y-%m-%d")
         key = f"{prefix}{date_str}.db"
         try:
             storage.s3_client.head_object(Bucket=COS_BUCKET, Key=key)
