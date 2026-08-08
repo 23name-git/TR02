@@ -544,70 +544,70 @@ custom:
 # ───────────────────────────────────────────────────────────────
 # 6️⃣ minimal_ai - 全天无AI + 晚间1次Daily + 深夜兜底（新增）
 # ───────────────────────────────────────────────────────────────
-minimal_ai:
-  name: "极简AI：白天仅推榜单，晚间1次Daily，深夜兜底"
-  description: "白天 00:00-20:00 仅推当前榜单(无AI) | 晚间 20:00-22:00 跑1次Daily深度 | 深夜 22:00-24:00 兜底仅推榜单 | 七天同一套节奏"
+# minimal_ai:
+#   name: "极简AI：白天仅推榜单，晚间1次Daily，深夜兜底"
+#   description: "白天 00:00-20:00 仅推当前榜单(无AI) | 晚间 20:00-22:00 跑1次Daily深度 | 深夜 22:00-24:00 兜底仅推榜单 | 七天同一套节奏"
 
-  # 默认配置（静默期：只采集，不分析，不推送）
-  default:
-    collect: true
-    analyze: false
-    ai_mode: "current"
-    push: false
-    report_mode: "current"
-    once:
-      analyze: true
-      push: true
+#   # 默认配置（静默期：只采集，不分析，不推送）
+#   default:
+#     collect: true
+#     analyze: false
+#     ai_mode: "current"
+#     push: false
+#     report_mode: "current"
+#     once:
+#       analyze: true
+#       push: true
 
-  # 时间段定义（三个积木块覆盖全天，无重叠）
-  periods:
-    # 时段1：白天全天 —— 仅推当前榜单，完全不调用 AI
-    daytime_no_ai:
-      name: "白天仅推榜单（无AI）"
-      start: "00:00"
-      end: "20:00"
-      ai_mode: "none"           # ⚠️ 关键：不调用 AI
-      report_mode: "current"    # 当前榜单格式
-      push: true                # 开启推送
-      analyze: false            # 明确关闭分析
+#   # 时间段定义（三个积木块覆盖全天，无重叠）
+#   periods:
+#     # 时段1：白天全天 —— 仅推当前榜单，完全不调用 AI
+#     daytime_no_ai:
+#       name: "白天仅推榜单（无AI）"
+#       start: "00:00"
+#       end: "20:00"
+#       ai_mode: "none"           # ⚠️ 关键：不调用 AI
+#       report_mode: "current"    # 当前榜单格式
+#       push: true                # 开启推送
+#       analyze: false            # 明确关闭分析
 
-    # 时段2：晚间 20:00-22:00 —— 仅跑 1 次 Daily 深度 AI 分析
-    evening_daily:
-      name: "晚间深度汇总"
-      start: "20:00"
-      end: "22:00"
-      ai_mode: "daily"          # 深度 AI 分析
-      report_mode: "daily"      # 深度报告格式
-      push: true
-      analyze: true
-      once:
-        analyze: true           # ⚠️ 窗口内只跑 1 次 AI
-        push: true              # 窗口内只推 1 次
+#     # 时段2：晚间 20:00-22:00 —— 仅跑 1 次 Daily 深度 AI 分析
+#     evening_daily:
+#       name: "晚间深度汇总"
+#       start: "20:00"
+#       end: "22:00"
+#       ai_mode: "daily"          # 深度 AI 分析
+#       report_mode: "daily"      # 深度报告格式
+#       push: true
+#       analyze: true
+#       once:
+#         analyze: true           # ⚠️ 窗口内只跑 1 次 AI
+#         push: true              # 窗口内只推 1 次
 
-    # 时段3：深夜兜底 22:00-24:00 —— 同白天，仅推榜单无 AI
-    late_night_fallback:
-      name: "深夜兜底仅推榜单"
-      start: "22:00"
-      end: "24:00"
-      ai_mode: "none"
-      report_mode: "current"
-      push: true
-      analyze: false
+#     # 时段3：深夜兜底 22:00-24:00 —— 同白天，仅推榜单无 AI
+#     late_night_fallback:
+#       name: "深夜兜底仅推榜单"
+#       start: "22:00"
+#       end: "24:00"
+#       ai_mode: "none"
+#       report_mode: "current"
+#       push: true
+#       analyze: false
 
-  # 日计划：七天同一套
-  day_plans:
-    all_day:
-      periods: ["daytime_no_ai", "evening_daily", "late_night_fallback"]
+#   # 日计划：七天同一套
+#   day_plans:
+#     all_day:
+#       periods: ["daytime_no_ai", "evening_daily", "late_night_fallback"]
 
-  # 周映射：周一到周日全用 all_day
-  week_map:
-    1: "all_day"
-    2: "all_day"
-    3: "all_day"
-    4: "all_day"
-    5: "all_day"
-    6: "all_day"
-    7: "all_day"
+#   # 周映射：周一到周日全用 all_day
+#   week_map:
+#     1: "all_day"
+#     2: "all_day"
+#     3: "all_day"
+#     4: "all_day"
+#     5: "all_day"
+#     6: "all_day"
+#     7: "all_day"
 
   # 冲突策略
   #overlap:
